@@ -20,6 +20,12 @@ WoundTrack/
 ├── notebooks/
 │   ├── woundtrack_main.ipynb          # Main Kaggle notebook (MedGemma pipeline)
 │   └── synthetic_wound_generator.ipynb # Colab notebook for image generation
+├── azure_ml/                           # Azure ML pipeline for synthetic generation
+│   ├── generate_synthetic_wounds.py   # Main generation script
+│   ├── pipeline_definition.py         # Pipeline orchestration
+│   ├── upload_baseline_images.py      # Dataset upload helper
+│   ├── environment.yml                # Conda environment
+│   └── README.md                      # Azure ML setup guide
 ├── data/                               # Dataset directory (gitignored)
 ├── outputs/                            # Generated reports and visualizations
 ├── src/                                # Source code modules
@@ -45,10 +51,16 @@ WoundTrack/
 2. Add the two datasets via "Add Data"
 3. Run all cells
 
-### Option 2: Google Colab
-1. Upload notebooks to Colab
+### Option 2: Google Colab (For Synthetic Generation)
+1. Upload `notebooks/synthetic_wound_generator.ipynb` to Colab
 2. Connect to GPU runtime
-3. Mount Kaggle datasets via API
+3. Upload baseline images and run generation
+
+### Option 3: Azure ML Studio (Production Pipeline)
+1. Follow setup in `azure_ml/README.md`
+2. Upload baseline images to Azure ML datastore  
+3. Submit GPU pipeline job for batch generation
+4. **Most reliable for large-scale generation**
 
 ## 🛠️ Technology Stack
 
