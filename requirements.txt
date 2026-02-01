@@ -1,0 +1,30 @@
+# Python dependencies for WoundTrack
+
+# Core ML frameworks
+torch>=2.0.0
+transformers>=4.35.0
+accelerate>=0.24.0
+
+# Image processing
+Pillow>=10.0.0
+opencv-python>=4.8.0
+
+# Data handling
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Visualization
+matplotlib>=3.7.0
+plotly>=5.17.0
+seaborn>=0.12.0
+
+# PDF generation
+reportlab>=4.0.0
+
+# Diffusion models (for synthetic generation)
+diffusers>=0.24.0
+safetensors>=0.4.0
+
+# Utils
+tqdm>=4.66.0
+python-dateutil>=2.8.0
