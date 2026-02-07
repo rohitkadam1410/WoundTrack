@@ -32,7 +32,10 @@ WoundTrack/
 │   ├── preprocessing.py                # Image preprocessing pipeline
 │   ├── medgemma_inference.py          # MedGemma model wrappers
 │   ├── longitudinal_analysis.py       # Temporal comparison logic
-│   └── report_generator.py            # PDF report generation
+│   ├── dataset_schemas.py             # Pydantic schemas for dataset validation
+│   ├── generate_finetuning_dataset.py # Fine-tuning dataset generator
+│   ├── visualize_dataset.py           # Dataset visualization tools
+│   └── api.py                         # FastAPI backend
 └── README.md
 ```
 
@@ -43,6 +46,15 @@ WoundTrack/
 - [Diabetic Foot Ulcer (DFU)](https://www.kaggle.com/datasets/laithjj/diabetic-foot-ulcer-dfu) - Medical center images
 
 **Synthetic Progression**: Generated using Stable Diffusion img2img to create temporal sequences
+
+**Fine-Tuning Datasets**: Generate custom datasets for MedGemma model fine-tuning:
+```bash
+# Generate VLM (4B) and LLM (27B) training datasets
+python src/generate_finetuning_dataset.py --vlm_samples 1000 --llm_samples 800
+
+# Visualize generated dataset
+python src/visualize_dataset.py --dataset_path outputs/finetuning_dataset/vlm_train.jsonl --dataset_type vlm
+```
 
 ## 🚀 Quick Start
 
