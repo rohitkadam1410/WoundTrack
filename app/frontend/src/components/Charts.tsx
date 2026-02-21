@@ -8,13 +8,13 @@ import type { AnalysisResult, ClinicalAlert } from '../types'
 
 // ── Palette ──────────────────────────────────────────────────────
 const COLORS = {
-    teal: '#5cc4c3',
-    emerald: '#34d399',
-    amber: '#fbbf24',
-    red: '#f87171',
-    blue: '#60a5fa',
-    purple: '#a78bfa',
-    muted: '#7fa5a5',
+    teal: '#0ea5e9',
+    emerald: '#10b981',
+    amber: '#f59e0b',
+    red: '#ef4444',
+    blue: '#3b82f6',
+    purple: '#8b5cf6',
+    muted: '#64748b',
 }
 
 const PIE_COLORS = [COLORS.emerald, COLORS.amber, COLORS.red]
@@ -24,12 +24,12 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null
     return (
         <div style={{
-            background: 'rgba(15,28,54,0.95)', border: '1px solid rgba(92,196,195,0.3)',
-            borderRadius: 10, padding: '10px 14px', fontSize: 13,
+            background: COLORS.emerald, border: '1px solid rgba(0,0,0,0.1)',
+            borderRadius: 10, padding: '10px 14px', fontSize: 13, boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
         }}>
             <p style={{ color: COLORS.teal, fontWeight: 700, marginBottom: 4 }}>Day {label}</p>
             {payload.map((p: any, i: number) => (
-                <p key={i} style={{ color: p.color || '#fff' }}>
+                <p key={i} style={{ color: p.color || '#0f172a' }}>
                     {p.name}: <strong>{typeof p.value === 'number' ? p.value.toFixed(2) : p.value}</strong>
                 </p>
             ))}
@@ -56,7 +56,7 @@ export function AreaProgressionChart({ result }: { result: AnalysisResult }) {
                             <stop offset="95%" stopColor={COLORS.teal} stopOpacity={0} />
                         </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
                     <XAxis dataKey="day" tick={{ fill: COLORS.muted, fontSize: 12 }} label={{ value: 'Day', position: 'insideBottom', offset: -2, fill: COLORS.muted }} />
                     <YAxis tick={{ fill: COLORS.muted, fontSize: 12 }} unit=" cm²" />
                     <Tooltip content={<CustomTooltip />} />
@@ -112,7 +112,7 @@ export function PushScoreChart({ result }: { result: AnalysisResult }) {
             <h3 className="section-title">🏥 Clinical <span>Scores</span></h3>
             <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
                     <XAxis dataKey="day" tick={{ fill: COLORS.muted, fontSize: 12 }} />
                     <YAxis tick={{ fill: COLORS.muted, fontSize: 12 }} />
                     <Tooltip content={<CustomTooltip />} />
@@ -138,7 +138,7 @@ export function RiskChart({ result }: { result: AnalysisResult }) {
             <h3 className="section-title">⚠️ Amputation <span>Risk</span></h3>
             <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
                     <XAxis dataKey="day" tick={{ fill: COLORS.muted, fontSize: 12 }} />
                     <YAxis tick={{ fill: COLORS.muted, fontSize: 12 }} unit="%" domain={[0, 100]} />
                     <Tooltip content={<CustomTooltip />} />
@@ -167,11 +167,11 @@ export function HealingVelocityChart({ result }: { result: AnalysisResult }) {
             <p style={{ fontSize: 12, color: COLORS.muted, marginBottom: 8 }}>cm² / week (negative = healing)</p>
             <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
                     <XAxis dataKey="label" tick={{ fill: COLORS.muted, fontSize: 10 }} />
                     <YAxis tick={{ fill: COLORS.muted, fontSize: 12 }} unit=" cm²" />
                     <Tooltip content={<CustomTooltip />} />
-                    <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
+                    <ReferenceLine y={0} stroke="rgba(0,0,0,0.1)" />
                     <Bar dataKey="velocity" name="Velocity" fill={COLORS.emerald}
                         radius={[4, 4, 0, 0]}
                         label={false}
@@ -198,7 +198,7 @@ export function TissueTrendChart({ result }: { result: AnalysisResult }) {
             <h3 className="section-title">📊 Tissue <span>Evolution</span></h3>
             <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
                     <XAxis dataKey="day" tick={{ fill: COLORS.muted, fontSize: 12 }} />
                     <YAxis tick={{ fill: COLORS.muted, fontSize: 12 }} unit="%" />
                     <Tooltip content={<CustomTooltip />} />
@@ -221,8 +221,8 @@ export function AlertsPanel({ alerts }: { alerts: ClinicalAlert[] }) {
                 <h3 className="section-title">🚦 Clinical <span>Alerts</span></h3>
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
                     <span style={{ fontSize: 32 }}>✅</span>
-                    <p style={{ color: '#34d399', fontWeight: 600, marginTop: 8 }}>No clinical alerts triggered</p>
-                    <p style={{ color: '#7fa5a5', fontSize: 13 }}>Wound is progressing within expected parameters</p>
+                    <p style={{ color: COLORS.emerald, fontWeight: 600, marginTop: 8 }}>No clinical alerts triggered</p>
+                    <p style={{ color: '#64748b', fontSize: 13 }}>Wound is progressing within expected parameters</p>
                 </div>
             </div>
         )
@@ -240,11 +240,11 @@ export function AlertsPanel({ alerts }: { alerts: ClinicalAlert[] }) {
                             <span>{icon(a.severity)}</span>
                             <span style={{ fontWeight: 700, fontSize: 14 }}>{a.category}</span>
                             <span className={`badge badge-${a.severity}`}>{a.severity}</span>
-                            <span style={{ marginLeft: 'auto', color: '#7fa5a5', fontSize: 12 }}>Day {a.triggered_at_day}</span>
+                            <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: 12 }}>Day {a.triggered_at_day}</span>
                         </div>
-                        <p style={{ fontSize: 14, color: '#e2f0f0', marginBottom: a.recommendations.length ? 8 : 0 }}>{a.message}</p>
+                        <p style={{ fontSize: 14, color: '#0f172a', marginBottom: a.recommendations.length ? 8 : 0 }}>{a.message}</p>
                         {a.recommendations.slice(0, 3).map((r, j) => (
-                            <p key={j} style={{ fontSize: 12, color: '#7fa5a5', paddingLeft: 16 }}>• {r}</p>
+                            <p key={j} style={{ fontSize: 12, color: '#64748b', paddingLeft: 16 }}>• {r}</p>
                         ))}
                     </div>
                 ))}
@@ -257,9 +257,9 @@ export function AlertsPanel({ alerts }: { alerts: ClinicalAlert[] }) {
 export function SummaryStats({ result }: { result: AnalysisResult }) {
     const m = result.longitudinal_metrics
     const statusColors: Record<string, string> = {
-        healing_well: '#34d399', improving_high_risk: '#fbbf24',
-        deteriorating: '#f87171', stagnant_needs_intervention: '#f87171',
-        stable_small: '#60a5fa', unknown: '#7fa5a5',
+        healing_well: '#10b981', improving_high_risk: '#f59e0b',
+        deteriorating: '#ef4444', stagnant_needs_intervention: '#ef4444',
+        stable_small: '#3b82f6', unknown: '#64748b',
     }
     const statusLabel: Record<string, string> = {
         healing_well: 'Healing Well', improving_high_risk: 'Improving (High Risk)',
@@ -280,7 +280,7 @@ export function SummaryStats({ result }: { result: AnalysisResult }) {
             <div className="card mb-4" style={{ border: `1px solid ${statusColor}33`, background: `${statusColor}0d` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                     <div>
-                        <p style={{ fontSize: 12, color: '#7fa5a5', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Overall Status</p>
+                        <p style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Overall Status</p>
                         <p style={{ fontSize: 24, fontWeight: 800, color: statusColor, marginTop: 2 }}>
                             {statusLabel[result.overall_status] || result.overall_status}
                         </p>
@@ -328,7 +328,7 @@ export function SummaryStats({ result }: { result: AnalysisResult }) {
                 </div>
                 <div className="stat-card">
                     <span className="stat-label">Healing Velocity</span>
-                    <span className="stat-value" style={{ color: '#5cc4c3' }}>
+                    <span className="stat-value" style={{ color: '#0ea5e9' }}>
                         {m.avg_healing_velocity.toFixed(2)}
                     </span>
                     <span className="stat-sub">cm² / week avg</span>
@@ -367,10 +367,10 @@ export function TimepointTimeline({ result }: { result: AnalysisResult }) {
                                 <span className="badge badge-teal">{tp.wound_area.toFixed(2)} cm²</span>
                             </div>
                             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: 12, color: '#7fa5a5' }}>PUSH: <b style={{ color: '#e2f0f0' }}>{tp.clinical_scores?.push ?? '—'}</b></span>
-                                <span style={{ fontSize: 12, color: '#7fa5a5' }}>Wagner: <b style={{ color: '#e2f0f0' }}>{tp.clinical_scores?.wagner ?? '—'}</b></span>
-                                <span style={{ fontSize: 12, color: '#7fa5a5' }}>Risk: <b style={{ color: '#e2f0f0' }}>{((tp.risk_assessment ?? 0) * 100).toFixed(0)}%</b></span>
-                                <span style={{ fontSize: 12, color: '#7fa5a5' }}>Forecast: <b style={{ color: '#e2f0f0' }}>{tp.healing_forecast_days}d to closure</b></span>
+                                <span style={{ fontSize: 12, color: '#64748b' }}>PUSH: <b style={{ color: '#0f172a' }}>{tp.clinical_scores?.push ?? '—'}</b></span>
+                                <span style={{ fontSize: 12, color: '#64748b' }}>Wagner: <b style={{ color: '#0f172a' }}>{tp.clinical_scores?.wagner ?? '—'}</b></span>
+                                <span style={{ fontSize: 12, color: '#64748b' }}>Risk: <b style={{ color: '#0f172a' }}>{((tp.risk_assessment ?? 0) * 100).toFixed(0)}%</b></span>
+                                <span style={{ fontSize: 12, color: '#64748b' }}>Forecast: <b style={{ color: '#0f172a' }}>{tp.healing_forecast_days}d to closure</b></span>
                             </div>
                         </div>
                     </div>

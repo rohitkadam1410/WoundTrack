@@ -129,7 +129,7 @@ function LandingPage({ onStart, onDemo }: { onStart: () => void; onDemo: () => v
                   <span className="badge badge-teal" style={{ fontSize: 10 }}>{c.badge}</span>
                 </div>
               </div>
-              <p style={{ fontSize: 13, color: '#7fa5a5', lineHeight: 1.7 }}>{c.desc}</p>
+              <p style={{ fontSize: 13, color: '#64748b', lineHeight: 1.7 }}>{c.desc}</p>
             </div>
           ))}
         </div>
@@ -207,7 +207,7 @@ function UploadPage({ onResult }: { onResult: (r: AnalysisResult) => void }) {
       <h1 className="section-title animate-fade-up" style={{ fontSize: 32, marginBottom: 8 }}>
         Wound <span>Analysis</span>
       </h1>
-      <p style={{ color: '#7fa5a5', marginBottom: 32 }} className="animate-fade-up">
+      <p style={{ color: '#64748b', marginBottom: 32 }} className="animate-fade-up">
         Upload wound images and patient information to run the AI analysis pipeline.
       </p>
 
@@ -307,7 +307,7 @@ function UploadPage({ onResult }: { onResult: (r: AnalysisResult) => void }) {
                 <p style={{ fontWeight: 600, marginBottom: 4 }}>
                   {files.length ? `${files.length} file(s) selected` : 'Drop images here'}
                 </p>
-                <p style={{ color: '#7fa5a5', fontSize: 13 }}>
+                <p style={{ color: '#64748b', fontSize: 13 }}>
                   {mode === 'single' ? 'PNG, JPG, JPEG' : `Upload ${days.split(',').length} images in chronological order`}
                 </p>
               </div>
@@ -315,9 +315,9 @@ function UploadPage({ onResult }: { onResult: (r: AnalysisResult) => void }) {
               {files.length > 0 && (
                 <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {files.map((f, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#7fa5a5' }}>
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b' }}>
                       <span>🖼️</span>
-                      <span style={{ color: '#e2f0f0', flex: 1 }}>{f.name}</span>
+                      <span style={{ color: '#0f172a', flex: 1 }}>{f.name}</span>
                       {mode === 'sequence' && (
                         <span className="badge badge-teal">Day {days.split(',')[i]?.trim()}</span>
                       )}
@@ -332,7 +332,7 @@ function UploadPage({ onResult }: { onResult: (r: AnalysisResult) => void }) {
             <div className="card animate-fade-up" style={{ textAlign: 'center', padding: 40 }}>
               <span style={{ fontSize: 64 }}>🎬</span>
               <h3 style={{ fontWeight: 700, marginTop: 16, marginBottom: 8 }}>Demo Mode</h3>
-              <p style={{ color: '#7fa5a5', fontSize: 14 }}>
+              <p style={{ color: '#64748b', fontSize: 14 }}>
                 Runs the full 5-timepoint mock pipeline (Days 0, 7, 14, 21, 28) with realistic
                 healing progression. No image upload needed — perfect for showcasing the system.
               </p>
@@ -376,8 +376,8 @@ function DashboardPage({ result, onBack }: { result: AnalysisResult; onBack: () 
           <h1 className="section-title" style={{ fontSize: 28, margin: 0 }}>
             Analysis <span>Dashboard</span>
           </h1>
-          <p style={{ color: '#7fa5a5', fontSize: 14, marginTop: 4 }}>
-            Patient: <b style={{ color: '#e2f0f0' }}>{result.wound_id}</b> &nbsp;·&nbsp;
+          <p style={{ color: '#64748b', fontSize: 14, marginTop: 4 }}>
+            Patient: <b style={{ color: '#0f172a' }}>{result.wound_id}</b> &nbsp;·&nbsp;
             {result.timepoints.length} timepoints &nbsp;·&nbsp;
             {result.duration_days}-day span
           </p>
@@ -421,8 +421,8 @@ function DashboardPage({ result, onBack }: { result: AnalysisResult; onBack: () 
         <div className="grid-4">
           {Object.entries(result.patient_history || {}).map(([k, v]) => (
             <div key={k}>
-              <p style={{ fontSize: 11, color: '#7fa5a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.replace(/_/g, ' ')}</p>
-              <p style={{ fontWeight: 600, fontSize: 14, color: '#e2f0f0', marginTop: 2 }}>{String(v)}</p>
+              <p style={{ fontSize: 11, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.replace(/_/g, ' ')}</p>
+              <p style={{ fontWeight: 600, fontSize: 14, color: '#0f172a', marginTop: 2 }}>{String(v)}</p>
             </div>
           ))}
         </div>
@@ -462,15 +462,15 @@ export default function App() {
       {/* Global loading overlay */}
       {loading && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(6,13,27,0.85)',
+          position: 'fixed', inset: 0, background: 'rgba(255,255,255,0.85)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           zIndex: 1000, backdropFilter: 'blur(8px)',
         }}>
           <div className="spinner" style={{ width: 48, height: 48, borderWidth: 4 }} />
-          <p style={{ marginTop: 20, color: '#5cc4c3', fontWeight: 600, fontSize: 16 }}>
+          <p style={{ marginTop: 20, color: '#2d8f8e', fontWeight: 600, fontSize: 16 }}>
             Running AI Pipeline…
           </p>
-          <p style={{ color: '#7fa5a5', fontSize: 13, marginTop: 4 }}>
+          <p style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>
             WoundVision → WoundScore → RiskFusion → HealCast → CareGuide
           </p>
         </div>
