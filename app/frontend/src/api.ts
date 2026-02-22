@@ -3,17 +3,6 @@ import type { AnalysisResult } from './types'
 
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-export async function runDemo(params?: {
-    patient_id?: string
-    age?: number
-    HbA1c?: number
-    smoker?: boolean
-    days?: string
-}): Promise<AnalysisResult> {
-    const { data } = await axios.get<AnalysisResult>(`${BASE}/api/demo`, { params })
-    return data
-}
-
 export async function analyzeSingle(
     file: File,
     patient: { patient_id: string; age: number; HbA1c: number; smoker: boolean }
@@ -46,5 +35,10 @@ export async function analyzeSequence(
     form.append('diabetes_duration_years', String(patient.diabetes_duration_years))
     form.append('wound_location', patient.wound_location)
     const { data } = await axios.post<AnalysisResult>(`${BASE}/api/analyze-sequence`, form)
+    return data
+}
+
+export async function fetchPatientHistory(patient_id: string): Promise<AnalysisResult | null> {
+    const { data } = await axios.get<AnalysisResult | null>(`${BASE}/api/patient/${patient_id}/history`)
     return data
 }

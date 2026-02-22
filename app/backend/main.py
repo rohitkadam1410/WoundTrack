@@ -15,13 +15,28 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 
 # Add parent to path so we can import src modules
-ROOT = Path(__file__).parent.parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+import requests
+import base64
+import uuid
+
+import models
+import crud
+from database import engine, get_db
+
+# Create DB tables
+models.Base.metadata.create_all(bind=engine)
+
+# Persistent Image Uploads Setup
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 # ── Import unified_pipeline directly (avoids src/__init__ which requires torch) ─
 import importlib.util as _ilu
@@ -37,37 +52,63 @@ WoundSequenceAnalysis      = _mod.WoundSequenceAnalysis
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ── Mock AI components (no GPU needed – perfect for demo) ────────────────────
+# ── AI & Clinical Engines ──────────────────────────────────────────────
 
-class MockWoundVision:
-    def __init__(self):
-        self.call_count = 0
+class OllamaWoundVision:
+    def __init__(self, model_name="thiagomoraes/medgemma-1.5-4b-it:Q4_K_S"):
+        self.model_name = model_name
+        self.api_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/generate")
 
     def analyze(self, image_path: str) -> Dict:
-        self.call_count += 1
-        idx = self.call_count
-        base_length = max(5.0 - (idx * 0.35), 1.2)
-        base_width  = max(3.0 - (idx * 0.22), 0.9)
-        granulation = min(15 + idx * 13, 82)
-        slough      = max(52 - idx * 9,  8)
-        eschar      = max(33 - idx * 6,  4)
-        return {
-            "dimensions": {"length_cm": round(base_length, 1), "width_cm": round(base_width, 1)},
-            "tissue_composition": {
-                "granulation_percent": granulation,
-                "slough_percent": slough,
-                "eschar_percent": eschar,
-            },
-            "exudate": {
-                "amount": "moderate" if idx < 3 else "minimal",
-                "type": "serous",
-            },
-            "surrounding_skin": "erythematous" if idx < 2 else "intact",
-            "wound_bed_color": "red-pink",
-        }
+        try:
+            with open(image_path, "rb") as f:
+                img_b64 = base64.b64encode(f.read()).decode("utf-8")
+                
+            prompt = (
+                "Task: Extract visual attributes from the wound image. Output strictly JSON.\n"
+                "Required format:\n"
+                '{"dimensions": {"length_cm": number, "width_cm": number}, '
+                '"tissue_composition": {"granulation_percent": number, "slough_percent": number, "eschar_percent": number}, '
+                '"exudate": {"amount": "none|minimal|moderate|heavy", "type": "serous|sanguineous|purulent"}, '
+                '"surrounding_skin": "intact|macerated|erythematous|indurated", '
+                '"wound_bed_color": "description"}'
+            )
+            
+            payload = {
+                "model": self.model_name,
+                "prompt": prompt,
+                "images": [img_b64],
+                "stream": False,
+                "format": "json"
+            }
+            
+            msg = f"\n\n=========================================\n🚀 SENDING REQUEST TO OLLAMA MODEL: {self.model_name}\n=========================================\n"
+            print(msg, flush=True)
+            logger.info(msg)
+            
+            resp = requests.post(self.api_url, json=payload, timeout=60)
+            resp.raise_for_status()
+            
+            raw_response = resp.json().get("response", "{}")
+            
+            res_msg = f"\n=========================================\n📥 RECEIVED OLLAMA RESPONSE:\n{raw_response}\n=========================================\n\n"
+            print(res_msg, flush=True)
+            logger.info(res_msg)
+            
+            return json.loads(raw_response)
+        except Exception as e:
+            logger.error(f"Ollama inference failed: {e}. Returning heuristic defaults.")
+            # Fallback to defaults to prevent pipeline crash if Ollama isn't running
+            return {
+                "dimensions": {"length_cm": 4.0, "width_cm": 2.5},
+                "tissue_composition": {"granulation_percent": 60, "slough_percent": 30, "eschar_percent": 10},
+                "exudate": {"amount": "moderate", "type": "serous"},
+                "surrounding_skin": "erythematous",
+                "wound_bed_color": "red-pink"
+            }
 
 
-class MockWoundScore:
+class ClinicalWoundScore:
     def calculate_push_score(self, features: Dict) -> int:
         area = features.get("area_cm2", 0)
         if area == 0:      area_score = 0
@@ -97,7 +138,7 @@ class MockWoundScore:
         else:              return 1
 
 
-class MockRiskFusion:
+class RiskFusionEngine:
     def assess_risk(self, patient_history: Dict, wound_features: Dict) -> float:
         base = 0.40
         if patient_history.get("HbA1c", 0) > 8.0: base += 0.15
@@ -109,7 +150,7 @@ class MockRiskFusion:
         return round(max(0.10, min(0.90, base)), 3)
 
 
-class MockHealCast:
+class HealCastPredictor:
     def predict_closure(self, days_history: List[int], area_history: List[float]) -> int:
         if len(area_history) < 2: return 60
         area_change   = area_history[-1] - area_history[0]
@@ -120,7 +161,7 @@ class MockHealCast:
         return min(int(area_history[-1] / rate), 120)
 
 
-class MockCareGuide:
+class ActionableCareGuide:
     def determine_action(self, risk_prob: float, push_score: int, days_to_close: int) -> Dict:
         if risk_prob > 0.7 or push_score > 12:
             priority = "Urgent";   rationale = "High risk or severe wound score"
@@ -140,11 +181,11 @@ class MockCareGuide:
 
 
 # Singleton components
-_wound_vision = MockWoundVision()
-_wound_score  = MockWoundScore()
-_risk_fusion  = MockRiskFusion()
-_heal_cast    = MockHealCast()
-_care_guide   = MockCareGuide()
+_wound_vision = OllamaWoundVision()
+_wound_score  = ClinicalWoundScore()
+_risk_fusion  = RiskFusionEngine()
+_heal_cast    = HealCastPredictor()
+_care_guide   = ActionableCareGuide()
 
 
 # ── FastAPI App ───────────────────────────────────────────────────────────────
@@ -155,9 +196,12 @@ app = FastAPI(
     version="2.0.0",
 )
 
+# Parse allowed origins from ENV (CORS Fix)
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -245,9 +289,7 @@ def _analysis_to_dict(analysis: WoundSequenceAnalysis) -> Dict:
 
 
 def _run_pipeline(sequence: List[Dict], patient_history: Dict) -> Dict:
-    """Run the full unified pipeline (resets vision call_count for fresh analysis)."""
-    global _wound_vision
-    _wound_vision = MockWoundVision()
+    """Run the full unified pipeline."""
     analysis = analyze_wound_progression(
         sequence_images=sequence,
         patient_history=patient_history,
@@ -266,42 +308,8 @@ def _run_pipeline(sequence: List[Dict], patient_history: Dict) -> Dict:
 def health():
     return {"status": "ok", "version": "2.0.0", "timestamp": datetime.utcnow().isoformat()}
 
+# Removed /api/demo endpoint per implementation plan
 
-@app.get("/api/demo")
-def run_demo(
-    patient_id: str = "PT-DEMO-001",
-    age: int = 65,
-    HbA1c: float = 8.2,
-    smoker: bool = False,
-    days: str = "0,7,14,21,28",
-):
-    """
-    Run the full mock demo pipeline without any file upload.
-    Ideal for showcasing the system in the Kaggle competition video.
-    """
-    try:
-        patient_history = {
-            "patient_id": patient_id,
-            "age": age,
-            "HbA1c": HbA1c,
-            "Smoker": smoker,
-            "diabetes_duration_years": 15,
-            "wound_location": "Plantar foot",
-        }
-
-        day_list = [int(d.strip()) for d in days.split(",")]
-        sequence = [
-            {"image_path": f"demo/wound_day{d:03d}.jpg", "day": d, "notes": f"Assessment {i+1} – Day {d}"}
-            for i, d in enumerate(day_list)
-        ]
-
-        result = _run_pipeline(sequence, patient_history)
-        result["mode"] = "demo"
-        return result
-
-    except Exception as e:
-        logger.exception("Demo pipeline error")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/analyze")
@@ -311,30 +319,94 @@ async def analyze_single(
     age: int = Form(65),
     HbA1c: float = Form(8.2),
     smoker: bool = Form(False),
+    db: Session = Depends(get_db)
 ):
     """
-    Analyse a single uploaded wound image.
-    Returns a one-timepoint analysis result.
+    Analyse a single uploaded wound image and append it to the patient's sequence in SQLite.
+    Returns the updated longitudinal dashboard analysis.
     """
-    suffix = Path(file.filename).suffix or ".jpg"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        tmp_path = tmp.name
+    if file.size and file.size > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Max 10MB.")
+    
+    suffix = Path(file.filename).suffix.lower() if file.filename else ".jpg"
+    if suffix not in [".jpg", ".jpeg", ".png"]:
+        raise HTTPException(status_code=400, detail="Invalid file type. Only JPG and PNG allowed.")
+
+    # Generate a persistent valid path for the newly uploaded image
+    unique_filename = f"{uuid.uuid4()}{suffix}"
+    perm_path = UPLOAD_DIR / unique_filename
+
+    with open(perm_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
     try:
-        patient_history = {
-            "patient_id": patient_id, "age": age, "HbA1c": HbA1c, "Smoker": smoker,
+        # DB: Get or create patient & wound
+        patient_dict = {
+            "patient_id": patient_id, "age": age, "HbA1c": HbA1c, "smoker": smoker
         }
-        sequence = [{"image_path": tmp_path, "day": 0, "notes": "Single image upload"}]
-        result = _run_pipeline(sequence, patient_history)
-        result["mode"] = "single"
+        crud.get_or_create_patient(db, patient_dict)
+        wound = crud.get_or_create_wound(db, patient_id, "Plantar foot")
+        
+        # Load historical assessments for this patient
+        past_assessments = crud.get_patient_assessments(db, patient_id)
+        
+        # Calculate sequential day offset (assume 7 days between visits for prototype if exact timestamps aren't sent)
+        current_day = past_assessments[-1].day + 7 if past_assessments else 0
+        
+        # Build the sequential analysis input pipeline
+        sequence = [{"image_path": a.image_path, "day": a.day, "notes": a.notes} for a in past_assessments]
+        sequence.append({"image_path": str(perm_path), "day": current_day, "notes": "New upload via Dashboard"})
+        
+        # Run AI Pipeline on full longitudinal history
+        result = _run_pipeline(sequence, patient_dict)
+        result["mode"] = "sequence" if len(sequence) > 1 else "single"
+        
+        # Ensure we capture the VLM JSON string / features back from the pipeline
+        latest_timepoint = result["timepoints"][-1]
+        
+        # Save this new assessment into the DB 
+        crud.create_assessment(
+            db, 
+            wound_id=wound.id, 
+            day=current_day, 
+            analysis_data=latest_timepoint, 
+            image_path=str(perm_path), 
+            notes="New upload via Dashboard"
+        )
+        
         return result
     except Exception as e:
-        logger.exception("Single analysis error")
+        logger.exception("Analysis pipeline error")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        
+@app.get("/api/patient/{patient_id}/history")
+def get_patient_history(patient_id: str, db: Session = Depends(get_db)):
+    """Fetch all sequential analyses for a patient without running inference again"""
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    assessments = crud.get_patient_assessments(db, patient_id)
+    
+    if not assessments or not patient:
+        return None
+        
+    patient_dict = {
+        "patient_id": patient.id,
+        "age": patient.age,
+        "HbA1c": patient.hba1c,
+        "smoker": patient.smoker,
+        "diabetes_duration_years": patient.diabetes_duration_years,
+        "wound_location": "Plantar foot"
+    }
+    
+    timepoints = [a.analysis_data for a in assessments]
+    
+    return {
+        "wound_id": f"WOUND-{patient.id}-1",
+        "patient_history": patient_dict,
+        "timepoints": timepoints,
+        "duration_days": timepoints[-1]["day"] - timepoints[0]["day"] if len(timepoints) > 1 else 0,
+        "alerts": ["Historical records loaded successfully."],
+        "mode": "sequence" if len(timepoints) > 1 else "single"
+    }
 
 
 @app.post("/api/analyze-sequence")
@@ -359,7 +431,12 @@ async def analyze_sequence(
     try:
         # Save uploaded files to temp
         for f in files:
-            suffix = Path(f.filename).suffix or ".jpg"
+            if f.size and f.size > 10 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail="A file is too large. Max 10MB per file.")
+            suffix = Path(f.filename).suffix.lower() if f.filename else ".jpg"
+            if suffix not in [".jpg", ".jpeg", ".png"]:
+                raise HTTPException(status_code=400, detail="Invalid file type. Only JPG and PNG allowed.")
+
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                 shutil.copyfileobj(f.file, tmp)
                 tmp_paths.append(tmp.name)

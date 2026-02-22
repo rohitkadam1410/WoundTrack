@@ -69,3 +69,11 @@ export interface AnalysisResult {
     summary: Record<string, unknown>
     mode: string
 }
+
+export type Page = 'landing' | 'login' | 'home' | 'patient_search' | 'upload' | 'dashboard'
+export type UploadMode = 'single' | 'sequence'
+
+export interface PatientForm {
+    patient_id: string; age: number; HbA1c: number; smoker: boolean
+    diabetes_duration_years: number; wound_location: string; name?: string
+}
