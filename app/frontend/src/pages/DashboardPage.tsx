@@ -32,6 +32,40 @@ export function DashboardPage({ result, onBack, onNewUpload }: { result: Analysi
             {/* Summary stats */}
             <SummaryStats result={result} />
 
+            {/* Care Recommendations */}
+            {(() => {
+                const latest = result.timepoints?.[result.timepoints.length - 1];
+                const rec = latest?.care_recommendation as Record<string, any> | undefined;
+                if (!rec) return null;
+                const priority = rec.priority as string;
+                const badgeClass = priority === 'Urgent' ? 'badge-urgent' : priority === 'Escalate' ? 'badge-escalate' : 'badge-stable';
+                const accentBg = priority === 'Urgent' ? '#fff1f2' : priority === 'Escalate' ? '#fffbeb' : '#f0fdf4';
+                const accentCol = priority === 'Urgent' ? '#991b1b' : priority === 'Escalate' ? '#92400e' : '#065f46';
+                return (
+                    <div className="card mt-4" style={{ background: accentBg, border: `1px solid ${accentCol}22` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                            <h3 className="section-title" style={{ fontSize: 16, margin: 0 }}>Care Recommendations</h3>
+                            <span className={`badge ${badgeClass}`}>{priority}</span>
+                        </div>
+                        {rec.rationale && (
+                            <p style={{ fontSize: 13, color: '#475569', fontStyle: 'italic', marginBottom: 12 }}>
+                                {rec.rationale}
+                            </p>
+                        )}
+                        {Array.isArray(rec.actions) && rec.actions.length > 0 && (
+                            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                {(rec.actions as string[]).map((action, i) => (
+                                    <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                        <span style={{ color: accentCol, fontWeight: 700, fontSize: 16, lineHeight: 1.3 }}>→</span>
+                                        <span style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.5 }}>{action}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                );
+            })()}
+
             {/* Charts row 1 */}
             <div className="grid-2 mt-6">
                 <AreaProgressionChart result={result} />

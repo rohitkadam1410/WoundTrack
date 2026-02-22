@@ -12,6 +12,10 @@ class Patient(Base):
     hba1c = Column(Float)
     smoker = Column(Boolean)
     diabetes_duration_years = Column(Integer)
+    # Stored after each MedGemma assessment
+    last_status = Column(String, nullable=True)
+    last_summary = Column(String, nullable=True)
+    last_alerts = Column(JSON, nullable=True)  # list of action strings
     
     wounds = relationship("Wound", back_populates="patient")
 

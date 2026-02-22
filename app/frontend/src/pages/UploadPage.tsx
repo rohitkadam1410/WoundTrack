@@ -54,7 +54,7 @@ export function UploadPage({ patient, onResult, onBack }: { patient: PatientForm
                             Age: {patient.age || '--'} • HbA1c: {patient.HbA1c || '--'}% • Diabetes: {patient.diabetes_duration_years || '--'} yrs
                         </p>
                     </div>
-                    <span className="badge badge-teal">ABDM Verified ✅</span>
+                    <span className="badge badge-teal">MedGemma 1.5 4B ✓</span>
                 </div>
             </div>
 

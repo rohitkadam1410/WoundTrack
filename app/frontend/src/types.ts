@@ -77,3 +77,17 @@ export interface PatientForm {
     patient_id: string; age: number; HbA1c: number; smoker: boolean
     diabetes_duration_years: number; wound_location: string; name?: string
 }
+
+export interface PatientListItem {
+    patient_id: string
+    name: string
+    age: number
+    num_visits: number
+    last_visit_day: number | null
+    status: string
+    summary: string
+    alerts: string[]
+    HbA1c: number
+    smoker: boolean
+    diabetes_duration_years: number
+}

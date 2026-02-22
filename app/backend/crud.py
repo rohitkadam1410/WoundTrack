@@ -15,8 +15,19 @@ def get_or_create_patient(db: Session, patient_dict: dict) -> models.Patient:
             diabetes_duration_years=patient_dict.get("diabetes_duration_years", 0)
         )
         db.add(patient)
-        db.commit()
-        db.refresh(patient)
+    else:
+        # Update blank/missing fields
+        updated = False
+        if not patient.name or patient.name == "Unknown":
+            new_name = patient_dict.get("name")
+            if new_name and new_name != "Unknown":
+                patient.name = new_name
+                updated = True
+        if updated:
+            db.add(patient)
+            
+    db.commit()
+    db.refresh(patient)
     return patient
 
 def get_or_create_wound(db: Session, patient_id: str, location: str) -> models.Wound:
@@ -58,3 +69,12 @@ def get_patient_assessments(db: Session, patient_id: str) -> List[models.WoundAs
     # Sort by day
     assessments.sort(key=lambda x: x.day)
     return assessments
+
+def update_patient_status(db: Session, patient_id: str, status: str, summary: str, alerts: list):
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if patient:
+        patient.last_status = status
+        patient.last_summary = summary
+        patient.last_alerts = alerts
+        db.add(patient)
+        db.commit()

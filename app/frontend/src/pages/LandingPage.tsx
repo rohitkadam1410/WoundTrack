@@ -5,7 +5,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
             <section className="hero container">
                 <div className="animate-fade-up">
                     <div className="hero-eyebrow">
-                        <span>🤖</span> Powered by Google MedGemma 1.5 & 27B
+                        <span>🤖</span> Powered by Google MedGemma 1.5 4B
                     </div>
                     <h1>AI-Powered DFU<br />Assessment for ASHAs</h1>
                     <p>
@@ -25,7 +25,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
             <div className="container">
                 <div className="features-row animate-fade-up-delay">
                     {[
-                        ['🔬', 'WoundVision (1.5 VLM)'],
+                        ['🔬', 'WoundVision (1.5 4B VLM)'],
                         ['📊', 'PUSH & Wagner Scoring'],
                         ['⚠️', 'Amputation Risk (RiskFusion)'],
                         ['🔮', 'HealCast Forecasting'],
@@ -49,8 +49,8 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                     {[
                         {
                             icon: '🔬', title: 'WoundVision',
-                            desc: 'MedGemma 1.5 VLM analyses DFU images to extract dimensions, tissue composition, exudate characteristics, and surrounding skin condition.',
-                            badge: '1.5 VLM',
+                            desc: 'MedGemma 1.5 4B VLM analyses DFU images to extract dimensions, tissue composition, exudate characteristics, and surrounding skin condition.',
+                            badge: '1.5 4B VLM',
                         },
                         {
                             icon: '📊', title: 'WoundScore',
@@ -95,7 +95,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 <div className="card mt-8" style={{ textAlign: 'center' }}>
                     <h3 style={{ fontWeight: 700, marginBottom: 16 }}>Technology Stack</h3>
                     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-                        {['Google MedGemma 1.5 + 27B', 'PyTorch + HuggingFace', 'FastAPI', 'React + Vite', 'Recharts'].map(t => (
+                        {['Google MedGemma 1.5 4B', 'PyTorch + HuggingFace', 'FastAPI', 'React + Vite', 'Recharts'].map(t => (
                             <span className="badge badge-teal" key={t} style={{ fontSize: 13, padding: '6px 14px' }}>{t}</span>
                         ))}
                     </div>

@@ -73,18 +73,28 @@ export default function App() {
             <LoginPage onLogin={() => setPage('home')} />
           )}
           {page === 'home' && (
-            <AshaHome onNewPatient={() => setPage('patient_search')} onRecent={async () => {
-              const p = {
-                patient_id: 'PT-042', age: 62, HbA1c: 7.1, smoker: false,
-                diabetes_duration_years: 8, wound_location: 'Dorsal'
-              };
-              setPatient(p);
+            <AshaHome onNewPatient={() => setPage('patient_search')} onRecent={async (patientId) => {
               try {
-                const history = await fetchPatientHistory(p.patient_id);
-                if (history && history.timepoints && history.timepoints.length > 0) {
-                  setResult(history);
-                  setPage('dashboard');
+                const history = await fetchPatientHistory(patientId);
+                if (history && history.patient_history) {
+                  const ph = history.patient_history as Record<string, any>;
+                  setPatient({
+                    patient_id: patientId,
+                    name: ph.name || '',
+                    age: ph.age || 0,
+                    HbA1c: ph.HbA1c || 0,
+                    smoker: ph.smoker || false,
+                    diabetes_duration_years: ph.diabetes_duration_years || 0,
+                    wound_location: ph.wound_location || ''
+                  });
+                  if (history.timepoints && history.timepoints.length > 0) {
+                    setResult(history);
+                    setPage('dashboard');
+                  } else {
+                    setPage('upload');
+                  }
                 } else {
+                  setPatient({ patient_id: patientId, name: '', age: 0, HbA1c: 0, smoker: false, diabetes_duration_years: 0, wound_location: '' });
                   setPage('upload');
                 }
               } catch (e) {

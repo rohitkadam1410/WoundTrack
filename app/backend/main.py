@@ -162,21 +162,68 @@ class HealCastPredictor:
 
 
 class ActionableCareGuide:
-    def determine_action(self, risk_prob: float, push_score: int, days_to_close: int) -> Dict:
+    def determine_action(self, risk_prob: float, push_score: int, days_to_close: int,
+                         granulation_pct: float = 50.0, slough_pct: float = 30.0,
+                         exudate: str = "moderate", wound_area: float = 5.0) -> Dict:
+        """Generate patient-specific care actions based on wound condition."""
+
+        # ── Priority & rationale ────────────────────────────────────────
         if risk_prob > 0.7 or push_score > 12:
-            priority = "Urgent";   rationale = "High risk or severe wound score"
+            priority  = "Urgent"
+            rationale = (
+                f"High risk (score {risk_prob:.2f}) with severe wound score ({push_score}). "
+                f"Estimated closure in {days_to_close}d – immediate escalation needed."
+            )
         elif risk_prob > 0.5 or push_score > 8:
-            priority = "Escalate"; rationale = "Moderate risk – enhanced monitoring required"
+            priority  = "Escalate"
+            rationale = (
+                f"Moderate risk (score {risk_prob:.2f}), PUSH score {push_score}. "
+                f"Targeted wound care required; expected closure in {days_to_close} days."
+            )
         else:
-            priority = "Routine";  rationale = "Low risk – continue current treatment protocol"
+            priority  = "Routine"
+            rationale = (
+                f"Low risk (score {risk_prob:.2f}), PUSH score {push_score}. "
+                f"Wound on track – estimate closure in {days_to_close} days."
+            )
+
+        # ── Build specific action list based on wound metrics ───────────
+        actions: list[str] = []
+
+        # Exudate-specific
+        if exudate == "heavy":
+            actions.append("Apply high-absorbency foam/alginate dressing; change q24–48h")
+        elif exudate == "moderate":
+            actions.append("Apply moisture-balancing dressing; change every 48–72h")
+        else:
+            actions.append("Maintain hydrocolloid dressing; change every 3–5 days")
+
+        # Tissue-composition specific
+        if slough_pct > 40:
+            actions.append(f"Debride slough tissue ({slough_pct:.0f}% coverage) – autolytic or sharp")
+        elif granulation_pct > 70:
+            actions.append(f"Protect granulation bed ({granulation_pct:.0f}%) – avoid trauma during dressing change")
+        else:
+            actions.append("Monitor tissue balance; photograph wound weekly for comparison")
+
+        # Risk-level specific
+        if priority == "Urgent":
+            actions.append("Refer to PHC doctor immediately for vascular/surgical assessment")
+        elif priority == "Escalate":
+            actions.append("Schedule follow-up within 48h; check for perilesional erythema/warmth")
+        else:
+            actions.append("Reinforce offloading footwear adherence and daily self-inspection")
+
+        # Healing velocity specific
+        if days_to_close > 90:
+            actions.append("Consider specialist referral – prolonged healing forecast (>90 days)")
+        elif days_to_close < 21 and priority == "Routine":
+            actions.append("Wound progressing well – maintain current protocol")
+
         return {
             "priority": priority,
             "rationale": rationale,
-            "actions": [
-                "Continue current dressing protocol",
-                "Monitor for signs of infection",
-                "Ensure patient compliance",
-            ],
+            "actions": actions[:4],   # max 4 actions on dashboard
         }
 
 
@@ -316,9 +363,12 @@ def health():
 async def analyze_single(
     file: UploadFile = File(...),
     patient_id: str = Form("PT-001"),
+    name: str = Form(""),
     age: int = Form(65),
     HbA1c: float = Form(8.2),
     smoker: bool = Form(False),
+    diabetes_duration_years: int = Form(0),
+    wound_location: str = Form("Unknown"),
     db: Session = Depends(get_db)
 ):
     """
@@ -342,10 +392,11 @@ async def analyze_single(
     try:
         # DB: Get or create patient & wound
         patient_dict = {
-            "patient_id": patient_id, "age": age, "HbA1c": HbA1c, "smoker": smoker
+            "patient_id": patient_id, "name": name, "age": age, "HbA1c": HbA1c, "smoker": smoker,
+            "diabetes_duration_years": diabetes_duration_years
         }
         crud.get_or_create_patient(db, patient_dict)
-        wound = crud.get_or_create_wound(db, patient_id, "Plantar foot")
+        wound = crud.get_or_create_wound(db, patient_id, wound_location)
         
         # Load historical assessments for this patient
         past_assessments = crud.get_patient_assessments(db, patient_id)
@@ -374,6 +425,26 @@ async def analyze_single(
             notes="New upload via Dashboard"
         )
         
+        # Store per-patient status derived from this MedGemma assessment
+        care_rec = latest_timepoint.get("care_recommendation", {})
+        if isinstance(care_rec, dict):
+            priority = care_rec.get("priority", "Routine")
+            _status_map = {"Routine": "Healing Well", "Escalate": "Monitor Closely", "Urgent": "Critical - Needs Action"}
+            ai_status = _status_map.get(priority, "Follow-up Needed")
+            ai_summary = care_rec.get("rationale", "")
+            ai_alerts = care_rec.get("actions", [])[:3]
+        else:
+            # Fallback from risk score
+            risk_val = latest_timepoint.get("risk_assessment", 5)
+            try:
+                risk = float(risk_val) if not isinstance(risk_val, dict) else risk_val.get("risk_score", 5)
+            except (TypeError, ValueError):
+                risk = 5.0
+            ai_status = "Healing Well" if risk < 4 else ("Monitor Closely" if risk < 7 else "Critical - Needs Action")
+            ai_summary = ""
+            ai_alerts = []
+        crud.update_patient_status(db, patient_id, ai_status, ai_summary, ai_alerts)
+        
         return result
     except Exception as e:
         logger.exception("Analysis pipeline error")
@@ -382,38 +453,182 @@ async def analyze_single(
 @app.get("/api/patient/{patient_id}/history")
 def get_patient_history(patient_id: str, db: Session = Depends(get_db)):
     """Fetch all sequential analyses for a patient without running inference again"""
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
-    assessments = crud.get_patient_assessments(db, patient_id)
+    from src.unified_pipeline import WoundSequenceAnalysis, TimePointAnalysis
+    import traceback
     
-    if not assessments or not patient:
-        return None
+    try:
+        patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+        assessments = crud.get_patient_assessments(db, patient_id)
         
-    patient_dict = {
-        "patient_id": patient.id,
-        "age": patient.age,
-        "HbA1c": patient.hba1c,
-        "smoker": patient.smoker,
-        "diabetes_duration_years": patient.diabetes_duration_years,
-        "wound_location": "Plantar foot"
-    }
-    
-    timepoints = [a.analysis_data for a in assessments]
-    
-    return {
-        "wound_id": f"WOUND-{patient.id}-1",
-        "patient_history": patient_dict,
-        "timepoints": timepoints,
-        "duration_days": timepoints[-1]["day"] - timepoints[0]["day"] if len(timepoints) > 1 else 0,
-        "alerts": ["Historical records loaded successfully."],
-        "mode": "sequence" if len(timepoints) > 1 else "single"
-    }
+        if not assessments or not patient:
+            return None
+            
+        patient_dict = {
+            "patient_id": patient.id,
+            "name": patient.name,
+            "age": patient.age,
+            "HbA1c": patient.hba1c,
+            "smoker": patient.smoker,
+            "diabetes_duration_years": patient.diabetes_duration_years,
+            "wound_location": "Unknown"
+        }
+        
+        wound = db.query(models.Wound).filter(models.Wound.patient_id == patient_id).first()
+        if wound:
+            patient_dict["wound_location"] = wound.location
+        
+        wound_id = f"WOUND-{patient.id}-1"
+        sequence_analysis = WoundSequenceAnalysis(wound_id=wound_id, patient_history=patient_dict)
+        
+        # Reconstruct the TimePointAnalysis history
+        for a in assessments:
+            data = a.analysis_data
+            vision = data.get("vision_analysis", {})
+            
+            # Normalize risk_assessment: stored as float or dict {risk_score: x}
+            raw_risk = data.get("risk_assessment")
+            if isinstance(raw_risk, dict):
+                risk_float = float(raw_risk.get("risk_score", raw_risk.get("risk", 0.5)))
+            elif raw_risk is not None:
+                try:
+                    risk_float = float(raw_risk)
+                except (TypeError, ValueError):
+                    risk_float = 0.5
+            else:
+                risk_float = None
 
+            # Build vision dict with standardised keys __post_init__ expects
+            raw_tissue = vision.get("tissue_composition", {})
+            # Normalise tissue keys (DB may store granulation/slough without _percent suffix)
+            norm_tissue = {
+                "granulation_percent": raw_tissue.get("granulation_percent",
+                    raw_tissue.get("granulation", 0)),
+                "slough_percent": raw_tissue.get("slough_percent",
+                    raw_tissue.get("slough", 0)),
+                "eschar_percent": raw_tissue.get("eschar_percent",
+                    raw_tissue.get("eschar", 0)),
+            }
+            dims = vision.get("dimensions", {})
+
+            tp = TimePointAnalysis(
+                day=a.day,
+                image_path=a.image_path,
+                notes=a.notes,
+                vision_analysis={"dimensions": dims, "tissue_composition": norm_tissue},
+                clinical_scores=data.get("clinical_scores"),
+                risk_assessment=risk_float,
+                healing_forecast=data.get("healing_forecast_days"),
+                care_recommendation=data.get("care_recommendation")
+            )
+            
+            # The __post_init__ will extract wound_area and tissue_composition correctly
+            sequence_analysis.add_timepoint(tp)
+            
+        sequence_analysis.analyze_trends()
+        sequence_analysis.generate_alerts()
+        sequence_analysis.set_overall_status()
+        
+        # Construct matching output dict format 
+        result = {
+            "wound_id": wound_id,
+            "patient_history": patient_dict,
+            "timepoints": [a.analysis_data for a in assessments],
+            "overall_status": sequence_analysis.overall_status,
+            "trends": sequence_analysis.trends.__dict__,
+            "longitudinal_metrics": sequence_analysis.longitudinal_metrics.__dict__,
+            "alerts": [a.__dict__ for a in sequence_analysis.alerts],
+            "duration_days": assessments[-1].day - assessments[0].day if len(assessments) > 1 else 0,
+            "mode": "sequence" if len(assessments) > 1 else "single"
+        }
+        return result
+    except Exception as e:
+        error_msg = f"Error reconstructing history: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+
+@app.get("/api/patients")
+def get_all_patients(db: Session = Depends(get_db)):
+    """Fetch all registered patients and a summary of their latest assessment."""
+    patients = db.query(models.Patient).all()
+    results = []
+    for p in patients:
+        assessments = crud.get_patient_assessments(db, p.id)
+        num_visits = len(assessments)
+        last_visit_day = assessments[-1].day if assessments else None
+        
+        status = "Follow-up Needed"
+        if assessments:
+            data = assessments[-1].analysis_data
+            if data and "care_recommendation" in data:
+                care_rec = data.get("care_recommendation", {})
+                priority = care_rec.get("priority", "Routine")
+                if priority == "Routine":
+                    status = "Healing Well"
+                elif priority == "Escalate":
+                    status = "Monitor Closely"
+                elif priority == "Urgent":
+                    status = "Critical - Needs Action"
+                else:
+                    status = "Follow-up Needed"
+            else:
+                # Fallback to risk score heuristic if explicit care recommendation is missing
+                if data and "risk_assessment" in data:
+                    risk_val = data.get("risk_assessment", 5)
+                    if isinstance(risk_val, dict):
+                        risk = risk_val.get("risk_score", 5)
+                    else:
+                        try:
+                            risk = float(risk_val)
+                        except (TypeError, ValueError):
+                            risk = 5.0
+                    if risk < 4:
+                        status = "Healing Well"
+                    elif risk < 7:
+                        status = "Monitor Closely"
+                    else:
+                        status = "Critical - Needs Action"
+
+        # Use stored AI status (from MedGemma via last assessment), fallback to computation
+        if p.last_status:
+            status = p.last_status
+            summary = p.last_summary or ""
+            alert_actions = p.last_alerts or []
+        else:
+            status = "Follow-up Needed"
+            summary = ""
+            alert_actions = []
+            if assessments:
+                data = assessments[-1].analysis_data
+                if data and "care_recommendation" in data:
+                    care_rec = data.get("care_recommendation", {})
+                    if isinstance(care_rec, dict):
+                        priority = care_rec.get("priority", "Routine")
+                        _status_map = {"Routine": "Healing Well", "Escalate": "Monitor Closely", "Urgent": "Critical - Needs Action"}
+                        status = _status_map.get(priority, "Follow-up Needed")
+                        summary = care_rec.get("rationale", "")
+                        alert_actions = care_rec.get("actions", [])[:3]
+
+        results.append({
+            "patient_id": p.id,
+            "name": p.name or "Unknown",
+            "age": p.age,
+            "num_visits": num_visits,
+            "last_visit_day": last_visit_day,
+            "status": status,
+            "summary": summary,
+            "alerts": alert_actions,
+            "HbA1c": p.hba1c,
+            "smoker": p.smoker,
+            "diabetes_duration_years": p.diabetes_duration_years
+        })
+    return results
 
 @app.post("/api/analyze-sequence")
 async def analyze_sequence(
     files: List[UploadFile] = File(...),
     days: str = Form("0,7,14,21,28"),
     patient_id: str = Form("PT-001"),
+    name: str = Form(""),
     age: int = Form(65),
     HbA1c: float = Form(8.2),
     smoker: bool = Form(False),

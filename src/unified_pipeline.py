@@ -118,58 +118,32 @@ class WoundSequenceAnalysis:
         
     def _update_metrics(self):
         """Update longitudinal metrics after new timepoint."""
-        if len(self.timepoints) < 2:
-            return
-            
-        # Update area metrics
+        # Always update area progression and risk — needed even for single visits
         self.longitudinal_metrics.area_progression = [
             tp.wound_area for tp in self.timepoints
         ]
-        
-        # Calculate area changes
-        for i in range(1, len(self.timepoints)):
-            prev_area = self.timepoints[i-1].wound_area
-            curr_area = self.timepoints[i].wound_area
-            if prev_area > 0:
-                change_pct = ((curr_area - prev_area) / prev_area) * 100
-                self.longitudinal_metrics.area_changes.append(change_pct)
-                
-                # Calculate rate
-                days_diff = self.timepoints[i].day - self.timepoints[i-1].day
-                if days_diff > 0:
-                    rate = (curr_area - prev_area) / days_diff * 7  # per week
-                    self.longitudinal_metrics.healing_velocity.append(rate)
-        
-        # Total area change
-        if self.timepoints[0].wound_area > 0:
-            self.longitudinal_metrics.total_area_change_pct = (
-                (self.timepoints[-1].wound_area - self.timepoints[0].wound_area) /
-                self.timepoints[0].wound_area
-            ) * 100
-            
-        # Update clinical scores
-        self.longitudinal_metrics.push_score_history = [
-            tp.clinical_scores.get('push', 0) for tp in self.timepoints
-            if tp.clinical_scores
-        ]
-        
-        self.longitudinal_metrics.wagner_grade_history = [
-            tp.clinical_scores.get('wagner', 0) for tp in self.timepoints
-            if tp.clinical_scores
-        ]
-        
-        # Update risk trajectory  
+
+        # Update risk trajectory — always
         self.longitudinal_metrics.risk_history = [
             tp.risk_assessment for tp in self.timepoints
             if tp.risk_assessment is not None
         ]
-        
         if self.longitudinal_metrics.risk_history:
             self.longitudinal_metrics.avg_risk = np.mean(
                 self.longitudinal_metrics.risk_history
             )
-            
-        # Update tissue trends
+
+        # Update clinical scores — always
+        self.longitudinal_metrics.push_score_history = [
+            tp.clinical_scores.get('push', 0) for tp in self.timepoints
+            if tp.clinical_scores
+        ]
+        self.longitudinal_metrics.wagner_grade_history = [
+            tp.clinical_scores.get('wagner', 0) for tp in self.timepoints
+            if tp.clinical_scores
+        ]
+
+        # Update tissue trends — always
         for tissue_type in ['granulation_percent', 'slough_percent', 'eschar_percent']:
             values = [
                 tp.tissue_composition.get(tissue_type, 0)
@@ -178,7 +152,28 @@ class WoundSequenceAnalysis:
             ]
             if values:
                 self.longitudinal_metrics.tissue_trends[tissue_type] = values
-                
+
+        # Multi-timepoint-only metrics (velocity, area changes)
+        if len(self.timepoints) >= 2:
+            for i in range(1, len(self.timepoints)):
+                prev_area = self.timepoints[i-1].wound_area
+                curr_area = self.timepoints[i].wound_area
+                if prev_area > 0:
+                    change_pct = ((curr_area - prev_area) / prev_area) * 100
+                    self.longitudinal_metrics.area_changes.append(change_pct)
+                    days_diff = self.timepoints[i].day - self.timepoints[i-1].day
+                    if days_diff > 0:
+                        rate = (curr_area - prev_area) / days_diff * 7  # per week
+                        self.longitudinal_metrics.healing_velocity.append(rate)
+
+            # Total area change
+            if self.timepoints[0].wound_area > 0:
+                self.longitudinal_metrics.total_area_change_pct = (
+                    (self.timepoints[-1].wound_area - self.timepoints[0].wound_area) /
+                    self.timepoints[0].wound_area
+                ) * 100
+
+
         # Update care priority history
         self.longitudinal_metrics.priority_history = [
             tp.care_recommendation.get('priority', 'Unknown')
@@ -187,17 +182,40 @@ class WoundSequenceAnalysis:
         ]
         
     def analyze_trends(self):
-        """Perform trend analysis."""
-        if len(self.timepoints) < 3:
-            return  # Need at least 3 points for trend analysis
-            
-        # Analyze area trend
+        """Perform trend analysis - works with 1+ timepoints."""
+        n = len(self.timepoints)
         areas = self.longitudinal_metrics.area_progression
-        if len(areas) >= 3:
-            # Simple linear regression slope
+        risks = self.longitudinal_metrics.risk_history
+
+        if n == 1:
+            # Single assessment: derive trend from risk score and care priority
+            risk = risks[0] if risks else 0.5
+            care = self.timepoints[0].care_recommendation or {}
+            priority = care.get("priority", "Routine") if isinstance(care, dict) else "Routine"
+            if priority == "Urgent" or risk > 0.7:
+                self.trends.healing_trend = "worsening"
+                self.trends.area_trend = "worsening"
+                self.trends.risk_trend = "worsening"
+            elif priority == "Escalate" or risk > 0.5:
+                self.trends.healing_trend = "plateauing"
+                self.trends.area_trend = "stable"
+                self.trends.risk_trend = "stable"
+            else:
+                self.trends.healing_trend = "improving"
+                self.trends.area_trend = "improving"
+                self.trends.risk_trend = "improving"
+            return
+
+        if n >= 2:
+            # Two or more points: simple before/after or slope comparison
             days = [tp.day for tp in self.timepoints]
-            slope = np.polyfit(days, areas, 1)[0]
-            
+
+            # Area trend (2 pts → direct diff; 3+ → linear regression)
+            if len(areas) >= 3:
+                slope = np.polyfit(days, areas, 1)[0]
+            else:
+                slope = (areas[-1] - areas[0]) / max((days[-1] - days[0]), 1)
+
             if slope < -0.1:
                 self.trends.area_trend = "improving"
                 self.trends.healing_trend = "improving"
@@ -207,30 +225,29 @@ class WoundSequenceAnalysis:
             else:
                 self.trends.area_trend = "stable"
                 self.trends.healing_trend = "plateauing"
-                
-        # Analyze acceleration
-        if len(self.longitudinal_metrics.healing_velocity) >= 2:
-            velocities = self.longitudinal_metrics.healing_velocity
-            if velocities[-1] < velocities[0]:
-                self.trends.acceleration = "decelerating"
-            elif velocities[-1] > velocities[0]:
-                self.trends.acceleration = "accelerating"
-            else:
-                self.trends.acceleration = "stable"
-                
-        # Analyze risk trend
-        if len(self.longitudinal_metrics.risk_history) >= 3:
-            risks = self.longitudinal_metrics.risk_history
-            if risks[-1] < risks[0] - 0.1:
-                self.trends.risk_trend = "improving"
-                self.longitudinal_metrics.risk_trend = "improving"
-            elif risks[-1] > risks[0] + 0.1:
-                self.trends.risk_trend = "worsening"
-                self.longitudinal_metrics.risk_trend = "worsening"
-            else:
-                self.trends.risk_trend = "stable"
-                self.longitudinal_metrics.risk_trend = "stable"
-                
+
+            # Acceleration (needs 2 velocity readings)
+            if len(self.longitudinal_metrics.healing_velocity) >= 2:
+                velocities = self.longitudinal_metrics.healing_velocity
+                if velocities[-1] < velocities[0]:
+                    self.trends.acceleration = "decelerating"
+                elif velocities[-1] > velocities[0]:
+                    self.trends.acceleration = "accelerating"
+                else:
+                    self.trends.acceleration = "stable"
+
+            # Risk trend
+            if len(risks) >= 2:
+                if risks[-1] < risks[0] - 0.05:
+                    self.trends.risk_trend = "improving"
+                    self.longitudinal_metrics.risk_trend = "improving"
+                elif risks[-1] > risks[0] + 0.05:
+                    self.trends.risk_trend = "worsening"
+                    self.longitudinal_metrics.risk_trend = "worsening"
+                else:
+                    self.trends.risk_trend = "stable"
+                    self.longitudinal_metrics.risk_trend = "stable"
+
         # Detect anomalies
         self._detect_anomalies()
         
@@ -438,8 +455,18 @@ def analyze_wound_progression(
         
         days_to_close = heal_cast.predict_closure(history_days, history_areas)
         
-        # 5. CareGuide analysis
-        care_decision = care_guide.determine_action(risk_prob, push_score, days_to_close)
+        # 5. CareGuide analysis – pass wound-specific metrics for tailored recommendations
+        tissue = vision_result.get('tissue_composition', {})
+        exudate_info = vision_result.get('exudate', {})
+        care_decision = care_guide.determine_action(
+            risk_prob,
+            push_score,
+            days_to_close,
+            granulation_pct=float(tissue.get('granulation_percent', tissue.get('granulation', 50))),
+            slough_pct=float(tissue.get('slough_percent', tissue.get('slough', 30))),
+            exudate=exudate_info.get('amount', 'moderate'),
+            wound_area=wound_area,
+        )
         
         # Create timepoint analysis
         tp_analysis = TimePointAnalysis(
