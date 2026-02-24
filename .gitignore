@@ -24,10 +24,17 @@ ENV/
 *.swo
 
 # Data directories (large files)
-data/
 outputs/
 reports/
 *.zip
+
+# Local Workspace (Not for competition repo)
+local_workspace/
+
+# Backend specifics
+app/backend/woundtrack.db
+app/backend/uploads/
+app/backend/venv/
 *.tar.gz
 
 # Model checkpoints
