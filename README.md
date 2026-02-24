@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
-**Automated wound healing assessment using Google MedGemma models (4B VLM + 27B LLM)**
+**Automated wound healing assessment using Google MedGemma models (4B VLM)**
 
 ## 🎯 Problem Statement
 
@@ -16,8 +16,7 @@ India faces a critical shortage of trained wound care specialists, placing an en
 ## 🧠 MedGemma Integration
 
 This project heavily leverages Google's state-of-the-art MedGemma family of models:
-- **MedGemma 4B VLM**: Analyzes wound images to accurately segment tissue types (granulation, slough, eschar) and measure the overall wound area.
-- **MedGemma 27B LLM**: Analyzes the longitudinal data provided by the VLM combined with patient history to compute clinical scores (PUSH, Wagner), evaluate amputation risk (RiskFusion), and predict the healing trajectory (HealCast).
+- **MedGemma 4B VLM**: Analyzes wound images to accurately segment tissue types (granulation, slough, eschar), measure the overall wound area, and evaluate the longitudinal data combined with patient history to compute clinical scores (PUSH, Wagner), evaluate amputation risk (RiskFusion), and predict the healing trajectory (HealCast).
 
 By uniting these multimodal capabilities, WoundTrack acts as an expert "copilot" for tracking longitudinal wound progression.
 
@@ -58,15 +57,22 @@ WoundTrack doesn't just look at a wound once. Our **Enhanced Longitudinal Pipeli
 2. Add the base wound image datasets (e.g. DFU) via "Add Data".
 3. Run the notebook to see the MedGemma components extract insights from sequential images.
 
-### Quick Start (Local Backend API)
+### Quick Start (Local Backend & Frontend)
 
-To test the application backend:
+To run the application backend:
 ```bash
 cd app/backend
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python main.py
+uvicorn main:app --reload
+```
+
+To run the application frontend:
+```bash
+cd app/frontend
+npm install
+npm run dev
 ```
 
 ## 📊 Datasets
@@ -75,7 +81,6 @@ python main.py
 - [Wound Segmentation Images](https://www.kaggle.com/datasets/leoscode/wound-segmentation-images)
 - [Diabetic Foot Ulcer (DFU)](https://www.kaggle.com/datasets/laithjj/diabetic-foot-ulcer-dfu) - Medical center images
 
-These are ingested, normalized, and analyzed by the **MedGemma 4B VLM** module.
 
 ## 📄 License
 
